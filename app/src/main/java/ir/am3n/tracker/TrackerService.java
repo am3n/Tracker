@@ -8,6 +8,11 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.graphics.Color;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.location.Location;
 import android.os.Build;
 import android.os.IBinder;
@@ -17,11 +22,13 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
+import java.util.Arrays;
+
 import ir.am3n.tracker.location.BaseLocationTracker;
 import ir.am3n.tracker.location.GPS;
 import ir.am3n.tracker.location.LocationTrackerListener;
 
-public class TrackerService extends Service implements LocationTrackerListener {
+public class TrackerService extends Service implements LocationTrackerListener, SensorEventListener {
 
     private static final int RQST_OPEN = 1000;
     private static final int RQST_EXIT = 1001;
@@ -77,7 +84,7 @@ public class TrackerService extends Service implements LocationTrackerListener {
         Intent intentExit = new Intent(this, TrackerService.class);
         intentExit.setAction(ACTION_EXIT);
         builder.addAction(
-                new NotificationCompat.Action(0, "Stop location",
+                new NotificationCompat.Action(0, "Stop",
                         PendingIntent.getService(this, RQST_EXIT, intentExit,
                                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_IMMUTABLE : 0)
                 )
@@ -93,16 +100,39 @@ public class TrackerService extends Service implements LocationTrackerListener {
         if (ACTION_EXIT.equals(intent.getAction())) {
             if (locationTracker != null)
                 locationTracker.stop();
+            SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+            sensorManager.unregisterListener(this);
             stopForeground(true);
             stopSelf();
+
         } else {
+
             if (locationTracker != null)
                 locationTracker.stop();
             locationTracker = new BaseLocationTracker(this, this);
             locationTracker.start();
+
+            SensorManager sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+            sensorManager.unregisterListener(this);
+            Sensor gyroscopeSensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+            if (gyroscopeSensor == null) {
+                Log.d("Me-MainAct", "Gyroscope sensor not available");
+                Toast.makeText(this, "Gyroscope sensor not available", Toast.LENGTH_LONG).show();
+            } else {
+                sensorManager.registerListener(this, gyroscopeSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            }
+            Sensor accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            if (accelerometerSensor == null) {
+                Log.d("Me-MainAct", "Accelerometer sensor not available");
+                Toast.makeText(this, "Accelerometer sensor not available", Toast.LENGTH_LONG).show();
+            } else {
+                sensorManager.registerListener(this, accelerometerSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            }
+
         }
         return START_STICKY;
     }
+
 
     @Override
     public void onNeedPermissions(String[] permissions) {
@@ -118,6 +148,17 @@ public class TrackerService extends Service implements LocationTrackerListener {
     @Override
     public void onStateChanged(GPS state) {
         Log.d("Me-TrackerService", "onStateChanged() " + state.toString());
+    }
+
+
+    @Override
+    public void onSensorChanged(SensorEvent sensorEvent) {
+        Log.d("Me-MainAct", "onSensorChanged  " + sensorEvent.sensor.getName() + "  " + Arrays.toString(sensorEvent.values) + "  " + sensorEvent.accuracy);
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int i) {
+        Log.d("Me-MainAct", "onAccuracyChanged  " + sensor.getName() + "  " + i);
     }
 
 }
